@@ -54,7 +54,24 @@ exactly one permission:
 The querier itself enforces all AWS read-only restrictions on the executed
 Python — `lambda:InvokeFunction` is just the call-the-querier permission.
 
-## Register with Claude Code
+## Two ways to run the server
+
+The same binary handles both:
+
+- **Local stdio** — Claude Code spawns the binary, talks to it over
+  stdin/stdout. Requires the user's local AWS creds. The path of least
+  setup; great for development.
+- **Remote Lambda + Function URL** — the server runs in AWS Lambda, fronted
+  by a Function URL with `AuthType = AWS_IAM`. Claude Code reaches it over
+  HTTPS using SigV4. Deploy with the `terraform/statusowl` module
+  (`enable_mcp = true`); see `terraform/statusowl/README.md` for the
+  artifact-source choices.
+
+The MCP server detects mode automatically: if `AWS_LAMBDA_FUNCTION_NAME` is
+set (Lambda runtime sets it), it serves Streamable HTTP; otherwise it
+speaks stdio.
+
+## Register with Claude Code (local stdio)
 
 Three places this can live, in order of what you probably want:
 
@@ -119,6 +136,30 @@ querier. Mentioned for completeness.
 After registering: restart Claude Code, confirm `statusowl/run_python`
 shows up in `/mcp`, and try *"use statusowl to print the caller identity
 from AWS."*
+
+## Register with Claude Code (remote Lambda)
+
+Once `enable_mcp = true` in your TF module is applied, point Claude Code at
+the Function URL. Claude Code's native MCP transport can SigV4-sign with
+your local AWS creds when given an HTTPS URL — no shim binary needed.
+
+```json
+{
+  "mcpServers": {
+    "statusowl": {
+      "type": "http",
+      "url": "https://<lambda-function-url-id>.lambda-url.<region>.on.aws/",
+      "headers": {
+        "x-aws-region": "<region>"
+      }
+    }
+  }
+}
+```
+
+The `url` is `module.statusowl.mcp_function_url` from the TF outputs. Your
+local creds need `lambda:InvokeFunctionUrl` on the function's ARN — paste
+the policy snippet from the TF README.
 
 ## Layout
 

@@ -13,3 +13,20 @@ module "querier" {
   log_retention_days     = var.log_retention_days
   tags                   = var.tags
 }
+
+module "mcp" {
+  source = "./modules/mcp"
+  count  = var.enable_mcp ? 1 : 0
+
+  name_prefix            = var.name_prefix
+  querier_function_arn   = module.querier.function_arn
+  querier_function_name  = module.querier.function_name
+  lambda_memory_mb       = var.mcp_lambda_memory_mb
+  lambda_timeout_seconds = var.mcp_lambda_timeout_seconds
+  lambda_architecture    = var.mcp_lambda_architecture
+  function_zip_url       = var.mcp_function_zip_url
+  function_zip_sha256    = var.mcp_function_zip_sha256
+  function_zip_path      = var.mcp_function_zip_path
+  log_retention_days     = var.mcp_log_retention_days
+  tags                   = var.tags
+}

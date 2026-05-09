@@ -33,6 +33,11 @@ func loadConfig() (*config, error) {
 
 	region := os.Getenv(envAWSRegion)
 	if region == "" {
+		// AWS_REGION is set automatically inside Lambda; pick it up so the
+		// TF module doesn't have to set STATUSOWL_AWS_REGION explicitly.
+		region = os.Getenv("AWS_REGION")
+	}
+	if region == "" {
 		region = defaultAWSRegion
 	}
 

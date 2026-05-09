@@ -55,12 +55,26 @@ func run() error {
 
 	registerRunPython(srv, q, cfg.Debug)
 
+	mode := "stdio"
+	if isLambda() {
+		mode = "lambda"
+	}
+
 	if cfg.Debug {
 		fmt.Fprintf(os.Stderr,
-			"statusowl-mcp: ready (function=%s region=%s)\n",
-			cfg.QuerierFunctionName, cfg.AWSRegion,
+			"statusowl-mcp: ready (mode=%s function=%s region=%s)\n",
+			mode, cfg.QuerierFunctionName, cfg.AWSRegion,
 		)
 	}
 
+	if isLambda() {
+		return runLambda(ctx, srv)
+	}
 	return srv.Run(ctx, &mcp.StdioTransport{})
+}
+
+// isLambda reports whether we're running inside an AWS Lambda execution
+// environment. AWS_LAMBDA_FUNCTION_NAME is set automatically by the runtime.
+func isLambda() bool {
+	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != ""
 }

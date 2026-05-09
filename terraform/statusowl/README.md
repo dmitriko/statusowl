@@ -1,8 +1,8 @@
 # statusowl Terraform module
 
-Provisions the statusowl read-only AWS-investigation engine. Today: just the
-querier Lambda. MCP and Slack will land as additional sub-modules; the root
-module is structured to absorb them without a refactor.
+Provisions the statusowl read-only AWS-investigation engine. Today: querier
+Lambda + MCP server (Lambda + Function URL, opt-in). Slack will land as the
+last sub-module.
 
 See [`../../DESIGN.md`](../../DESIGN.md) for the broader architecture.
 
@@ -25,16 +25,20 @@ module "statusowl" {
   lambda_memory_mb       = 512
   lambda_timeout_seconds = 90
 
-  # See "Choosing a Lambda artifact source" below. Production: pin a release
-  # URL + SHA-256. CI: pre-build and pass `function_zip_path`. Dev: leave
-  # all three of the function_zip_* / function_source_dir vars unset.
+  # Querier artifact (see "Choosing a Lambda artifact source" below).
   function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/querier-v0.1.0/querier.zip"
   function_zip_sha256 = "<paste from querier.zip.sha256 in the release>"
+
+  # MCP server (Lambda + Function URL). Default: enabled. Set to false for
+  # stdio-only deployments where every user runs the MCP binary locally.
+  enable_mcp              = true
+  mcp_function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/mcp-v0.1.0/statusowl-mcp_lambda_arm64.zip"
+  mcp_function_zip_sha256 = "<paste from the matching .sha256 in the release>"
+  mcp_lambda_architecture = "arm64"   # Graviton — flip to x86_64 if you must.
 }
 
-output "querier_role_arn" {
-  value = module.statusowl.querier_role_arn
-}
+output "querier_role_arn"  { value = module.statusowl.querier_role_arn }
+output "mcp_function_url"  { value = module.statusowl.mcp_function_url }
 ```
 
 ## Cross-account setup
@@ -72,6 +76,31 @@ resource "aws_iam_role_policy_attachment" "readonly" {
 
 Once the spoke role exists, add it to `spoke_account_roles` in the hub-side
 module block and re-apply.
+
+## MCP server
+
+The MCP sub-module is opt-in (`enable_mcp`, default `true`). It deploys the
+Go MCP server as a Lambda with a Function URL, `AuthType = AWS_IAM`. The
+Lambda's role has `lambda:InvokeFunction` on the querier and CloudWatch
+Logs writes — nothing else.
+
+The same set of artifact-source rules applies (path > URL > local build),
+but with the variables prefixed `mcp_`:
+
+```hcl
+mcp_function_zip_url    = "https://github.com/.../mcp-v0.1.0/statusowl-mcp_lambda_arm64.zip"
+mcp_function_zip_sha256 = "..."
+mcp_lambda_architecture = "arm64"   # must match the zip's architecture
+```
+
+Output `mcp_function_url` is what Claude Code points its remote-MCP config
+at. Callers must be granted `lambda:InvokeFunctionUrl` on the function ARN.
+A copy-pasteable IAM snippet for that lives in
+`cmd/mcp/README.md` § *Register with Claude Code (remote Lambda)*.
+
+The "local build" fallback for MCP runs `scripts/build-mcp.sh KIND=lambda`
+on every plan via an `external` data source. Fine for development; pin a
+release URL in production.
 
 ## Choosing a Lambda artifact source
 

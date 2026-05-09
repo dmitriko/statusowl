@@ -1,0 +1,143 @@
+name: release-mcp
+
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Lambda zips. arm64 first — it's the default we recommend (Graviton
+          # pricing); amd64 is shipped for users with arm64-incompatible base
+          # images or Lambda layers.
+          - { kind: lambda, goos: linux,   goarch: arm64 }
+          - { kind: lambda, goos: linux,   goarch: amd64 }
+          # Local-use binaries.
+          - { kind: binary, goos: linux,   goarch: arm64 }
+          - { kind: binary, goos: linux,   goarch: amd64 }
+          - { kind: binary, goos: darwin,  goarch: arm64 }
+          - { kind: binary, goos: darwin,  goarch: amd64 }
+          - { kind: binary, goos: windows, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build artifact
+        env:
+          KIND: ${{ matrix.kind }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: ./scripts/build-mcp.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-${{ matrix.kind }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: cmd/mcp/dist/statusowl-mcp_*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Each artifact dir contains the binary/zip + its .sha256 sidecar.
+          # Names already follow the release scheme (statusowl-mcp_<os>_<arch>
+          # or statusowl-mcp_lambda_<arch>.zip), so just move into release/.
+          find artifacts -type f \( -name 'statusowl-mcp_*' -o -name 'statusowl-mcp_*.sha256' \) -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          prev="$(git tag --list 'mcp-v*' --sort=-creatordate \
+                  | grep -vFx "$tag" \
+                  | head -n1 || true)"
+
+          {
+            echo "## Artifacts"
+            echo
+            echo "Lambda zips (recommended pin path: \`function_zip_url\` + \`function_zip_sha256\` in the TF module):"
+            echo
+            for arch in arm64 amd64; do
+              zip="release/statusowl-mcp_lambda_${arch}.zip"
+              if [[ -f "$zip" ]]; then
+                size="$(wc -c < "$zip" | tr -d ' ')"
+                sha="$(awk '{print $1}' "${zip}.sha256")"
+                echo "- \`statusowl-mcp_lambda_${arch}.zip\` — ${size} bytes, sha256 \`${sha}\`"
+              fi
+            done
+            echo
+            echo "Local-use binaries (chmod +x after download on macOS/Linux):"
+            echo
+            for f in release/statusowl-mcp_*; do
+              # Skip the lambda zips (listed above) and sha256 sidecars.
+              case "$f" in
+                *_lambda_*) continue ;;
+                *.sha256)   continue ;;
+              esac
+              base="$(basename "$f")"
+              size="$(wc -c < "$f" | tr -d ' ')"
+              sha="$(awk '{print $1}' "${f}.sha256")"
+              echo "- \`${base}\` — ${size} bytes, sha256 \`${sha}\`"
+            done
+            echo
+            echo "## Pin from Terraform (Lambda, arm64)"
+            echo
+            echo "\`\`\`hcl"
+            arm_zip="release/statusowl-mcp_lambda_arm64.zip"
+            if [[ -f "${arm_zip}.sha256" ]]; then
+              sha_arm="$(awk '{print $1}' "${arm_zip}.sha256")"
+              echo "function_zip_url    = \"https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/statusowl-mcp_lambda_arm64.zip\""
+              echo "function_zip_sha256 = \"${sha_arm}\""
+            fi
+            echo "\`\`\`"
+            echo
+            echo "## Changes"
+            echo
+            if [[ -n "$prev" ]]; then
+              echo "Since [\`${prev}\`](../../releases/tag/${prev}) (commits touching \`cmd/mcp/\`):"
+              echo
+              git log "${prev}..${tag}" --pretty='- %s (%h)' -- cmd/mcp
+            else
+              echo "Initial MCP release. Commits touching \`cmd/mcp/\`:"
+              echo
+              git log "$tag" --pretty='- %s (%h)' -- cmd/mcp
+            fi
+          } > release-notes.md
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.notes.outputs.tag }}" \
+            --title "${{ steps.notes.outputs.tag }}" \
+            --notes-file release-notes.md \
+            release/*

@@ -22,3 +22,18 @@ output "bucket_arn" {
   description = "ARN of the shared statusowl bucket."
   value       = module.querier.bucket_arn
 }
+
+output "mcp_function_url" {
+  description = "Function URL of the MCP Lambda (null when enable_mcp = false). Callers must SigV4-sign requests."
+  value       = var.enable_mcp ? module.mcp[0].function_url : null
+}
+
+output "mcp_function_arn" {
+  description = "ARN of the MCP Lambda (null when enable_mcp = false)."
+  value       = var.enable_mcp ? module.mcp[0].function_arn : null
+}
+
+output "mcp_role_arn" {
+  description = "ARN of the MCP Lambda's execution role (null when enable_mcp = false)."
+  value       = var.enable_mcp ? module.mcp[0].role_arn : null
+}

@@ -95,3 +95,53 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# --- MCP sub-module ---
+
+variable "enable_mcp" {
+  description = "Whether to deploy the MCP server Lambda + Function URL."
+  type        = bool
+  default     = true
+}
+
+variable "mcp_lambda_memory_mb" {
+  description = "Memory size (MB) for the MCP Lambda."
+  type        = number
+  default     = 256
+}
+
+variable "mcp_lambda_timeout_seconds" {
+  description = "Hard Lambda timeout (seconds) for the MCP Lambda."
+  type        = number
+  default     = 120
+}
+
+variable "mcp_lambda_architecture" {
+  description = "CPU architecture for the MCP Lambda. arm64 (Graviton) is cheaper for the same throughput."
+  type        = string
+  default     = "arm64"
+}
+
+variable "mcp_function_zip_url" {
+  description = "Release URL for the MCP Lambda zip (statusowl-mcp_lambda_<arch>.zip). See README §Choosing a Lambda artifact source."
+  type        = string
+  default     = null
+}
+
+variable "mcp_function_zip_sha256" {
+  description = "Hex SHA-256 of the MCP Lambda zip fetched via mcp_function_zip_url."
+  type        = string
+  default     = null
+}
+
+variable "mcp_function_zip_path" {
+  description = "Local path to a pre-built MCP Lambda zip. Highest precedence."
+  type        = string
+  default     = null
+}
+
+variable "mcp_log_retention_days" {
+  description = "CloudWatch Logs retention for the MCP Lambda."
+  type        = number
+  default     = 30
+}

@@ -39,9 +39,8 @@ build-querier: ## build the deterministic querier Lambda zip + sha256
 
 # --- mcp (Go server) ---
 
-build-mcp: ## build the MCP server binary
-	@mkdir -p $(MCP_DIR)/dist
-	cd $(MCP_DIR) && go build -trimpath -ldflags="-s -w" -o dist/statusowl-mcp ./...
+build-mcp: ## build the MCP server binary for the local platform
+	./scripts/build-mcp.sh
 
 vet-mcp: ## go vet the MCP server
 	cd $(MCP_DIR) && go vet ./...
