@@ -1,6 +1,6 @@
-# envscout — Design
+# statusowl — Design
 
-Repo: `github.com/dmitriko/envscout` (public, MIT)
+Repo: `github.com/dmitriko/statusowl` (public, MIT)
 
 A read-only agent for inspecting AWS environments. Consumed through Claude
 Code via MCP and Skills, with a thin Slack adapter for non-technical users.
@@ -30,8 +30,8 @@ Two ideas the design rests on:
    through PR review, like any other team artifact. Not a database, not a
    UI, not a runtime API.
 
-2. **The engine is three Lambdas.** `envscout-slack` receives chat events,
-   `envscout-mcp` serves tools, `envscout-querier` runs LLM-generated code.
+2. **The engine is three Lambdas.** `statusowl-slack` receives chat events,
+   `statusowl-mcp` serves tools, `statusowl-querier` runs LLM-generated code.
    Each has its own IAM role; none stores state. Everything persistent
    (skills, registry, audit log) lives in Git or S3.
 
@@ -43,7 +43,7 @@ User journey, three stages. Each is a skill in the template repo.
 
 1. **Bootstrap.** Clone template, `cd`, run claude, type "bootstrap." The
    skill orients the user, confirms inputs (Slack? multi-account?), and
-   writes a `module "envscout"` block ready to drop into their existing
+   writes a `module "statusowl"` block ready to drop into their existing
    Terraform.
 
 2. **Deploy.** User adds the module to their TF, runs `terraform apply`.
@@ -66,7 +66,7 @@ the registry.
 
 ```
                    ┌──────────────────────┐
-                   │ envscout-registry    │  CLI: init / sync / validate
+                   │ statusowl-registry    │  CLI: init / sync / validate
                    └──────────┬───────────┘
                               ▼
                    GitHub config repo
@@ -78,19 +78,19 @@ the registry.
                                     loaded by Slack agent (via prompt)
 
    ┌─────────────────────┐
-   │ envscout-slack      │  Go Lambda. Slack ⇄ MCP glue.
+   │ statusowl-slack      │  Go Lambda. Slack ⇄ MCP glue.
    │ (Slack connector)   │
    └──────────┬──────────┘
               │ MCP
    Claude     │
    Code  ─────┼────────▶ ┌──────────────────────┐
-              ▼          │ envscout-mcp         │  Go Lambda. Hot path.
+              ▼          │ statusowl-mcp         │  Go Lambda. Hot path.
                          │ (MCP server)         │  Reads registry. Read-only AWS.
                          └────┬───────────┬─────┘
                               │           │ run_python (invoke)
                          read │           ▼
                          AWS  │   ┌────────────────────┐
-                              │   │ envscout-querier   │  Python Lambda.
+                              │   │ statusowl-querier   │  Python Lambda.
                               │   │ (query executor)   │  Narrow IAM. Audit log.
                               │   └────────────────────┘
                               ▼
@@ -120,8 +120,8 @@ The model's primary knowledge surface.
 
 ### Knowledge skills (always present)
 
-- **`envscout-concepts`** — generic, ships in template repo. Explains the
-  envscout model: envs, probes, slates, how to interpret `get_status`,
+- **`statusowl-concepts`** — generic, ships in template repo. Explains the
+  statusowl model: envs, probes, slates, how to interpret `get_status`,
   when to reach for `run_python`. Stable.
 - **`<org>-envs`** — deployment-specific, written during stage 3. Summarizes
   the team's envs: names, patterns, conventions, gotchas. References
@@ -129,7 +129,7 @@ The model's primary knowledge surface.
 
 ### Stage skills (one per journey stage)
 
-- **`bootstrap`** — stage 1. Orient, gather inputs, write `module "envscout"` block.
+- **`bootstrap`** — stage 1. Orient, gather inputs, write `module "statusowl"` block.
 - **`deploy`** — stage 2. Walk user through `terraform apply`, verify outputs.
 - **`build-registry`** — stage 3. Use querier to walk AWS, write registry.
 
@@ -196,15 +196,15 @@ Each entry references an account from `accounts.yaml`:
 
 ```yaml
 accounts:
-  prod: { id: "111...", role: "arn:aws:iam::111...:role/envscout-readonly" }
-  dev:  { id: "222...", role: "arn:aws:iam::222...:role/envscout-readonly" }
+  prod: { id: "111...", role: "arn:aws:iam::111...:role/statusowl-readonly" }
+  dev:  { id: "222...", role: "arn:aws:iam::222...:role/statusowl-readonly" }
 ```
 
 Querier assumes the per-account role. MCP server stays in its home account.
 Hub-and-spoke trust topology, scales trivially.
 
-The cross-account `envscout-readonly` role is created out-of-band by the
-user (Terraform, console — outside envscout's read-only mandate). The
+The cross-account `statusowl-readonly` role is created out-of-band by the
+user (Terraform, console — outside statusowl's read-only mandate). The
 bootstrap skill provides the trust policy snippet and instructions; it does
 not create the role itself.
 
@@ -220,8 +220,8 @@ in, runs `claude`, and types "bootstrap." The journey from there is the
 five stages described above.
 
 ```
-$ git clone https://github.com/dmitriko/envscout-template my-team-envscout-config
-$ cd my-team-envscout-config && rm -rf .git && git init
+$ git clone https://github.com/dmitriko/statusowl-template my-team-statusowl-config
+$ cd my-team-statusowl-config && rm -rf .git && git init
 $ claude
 > bootstrap
 ```
@@ -231,7 +231,7 @@ querier rather than local Bash — generated Python runs in a single
 predictable execution per question, instead of multi-round-trip shell
 composition that fights `column`, `xargs`, and quoting.
 
-The `envscout-registry` CLI exists for scripted/CI use (`init`, `sync`,
+The `statusowl-registry` CLI exists for scripted/CI use (`init`, `sync`,
 `validate`) but is optional. Most users never run it directly.
 
 For teams with TF state in S3 or TF Cloud, stage 3 detects this and offers
@@ -319,16 +319,16 @@ surface is small and known.
 Three repos:
 
 ```
-envscout/                           ← public, MIT, github.com/dmitriko/envscout
+statusowl/                           ← public, MIT, github.com/dmitriko/statusowl
   cmd/registry/                      ← CLI (optional, for scripted use)
   cmd/mcp/                           ← Go MCP server
   cmd/querier/                       ← Python Lambda
   cmd/slack/                         ← Go Slack connector
-  terraform/envscout/                ← TF module: querier + optional MCP/Slack
+  terraform/statusowl/                ← TF module: querier + optional MCP/Slack
   internal/...
 
-envscout-template/                  ← public, github.com/dmitriko/envscout-template
-  skills/envscout-concepts/          ← generic knowledge skill
+statusowl-template/                  ← public, github.com/dmitriko/statusowl-template
+  skills/statusowl-concepts/          ← generic knowledge skill
   skills/bootstrap/                  ← stage 1 skill
   skills/deploy/                     ← stage 2 skill
   skills/build-registry/             ← stage 3 skill
@@ -336,11 +336,11 @@ envscout-template/                  ← public, github.com/dmitriko/envscout-tem
   accounts.yaml                      ← empty, filled in stage 3
   README.md
 
-<your-org>-envscout-config/         ← private, deployment-specific
+<your-org>-statusowl-config/         ← private, deployment-specific
   registry.yaml
   accounts.yaml
   skills/<org>-envs/
-  skills/envscout-concepts/          ← copied from template
+  skills/statusowl-concepts/          ← copied from template
   custom_focus.yaml                  ← optional
 ```
 
@@ -369,12 +369,12 @@ is a regression. CI grep is cheap insurance.
 
 Build order roughly mirrors the user journey.
 
-- `envscout-template` repo: `envscout-concepts` skill, three stage skills,
+- `statusowl-template` repo: `statusowl-concepts` skill, three stage skills,
   empty registry/accounts files, README.
-- TF module `terraform/envscout/`: querier (always), MCP (optional, default
+- TF module `terraform/statusowl/`: querier (always), MCP (optional, default
   on), Slack (optional, default off). Outputs role ARNs and endpoint URLs.
 - Querier Lambda: narrow IAM, audit log, assume-role for multi-account.
-- `bootstrap` skill: orient, write `module "envscout"` block.
+- `bootstrap` skill: orient, write `module "statusowl"` block.
 - `deploy` skill: walk user through `terraform apply`, verify outputs.
 - `build-registry` skill: probe proposal via querier, file generation.
 - MCP server with `get_status` and `run_python`. Code cache (S3, hashed
@@ -382,7 +382,7 @@ Build order roughly mirrors the user journey.
 - Slack connector. Channel mode where the bot reads every message and
   decides when to respond. Audit log at the chat layer, separate from
   querier audit.
-- `envscout-registry` CLI: `init` / `sync` / `validate` for scripted use.
+- `statusowl-registry` CLI: `init` / `sync` / `validate` for scripted use.
 - TF-state-as-source for stage 3 and CLI.
 - Multi-account exercised end-to-end.
 - Provisioned concurrency on the MCP server once usage is interactive.
@@ -395,15 +395,15 @@ The engine — three Lambdas:
 
 | Component           | Language | Runtime  | Purpose                   |
 |---------------------|----------|----------|---------------------------|
-| `envscout-slack`    | Go       | Lambda   | Slack connector           |
-| `envscout-mcp`      | Go       | Lambda   | MCP server, hot path      |
-| `envscout-querier`  | Python   | Lambda   | Sandboxed code execution  |
+| `statusowl-slack`    | Go       | Lambda   | Slack connector           |
+| `statusowl-mcp`      | Go       | Lambda   | MCP server, hot path      |
+| `statusowl-querier`  | Python   | Lambda   | Sandboxed code execution  |
 
 Plus a CLI for build-time work:
 
 | Component           | Language | Runtime  | Purpose                   |
 |---------------------|----------|----------|---------------------------|
-| `envscout-registry` | TBD      | CLI      | Build/maintain registry   |
+| `statusowl-registry` | TBD      | CLI      | Build/maintain registry   |
 
 LLM: Bedrock with Anthropic models. Stays inside AWS for IAM, billing,
 egress.
