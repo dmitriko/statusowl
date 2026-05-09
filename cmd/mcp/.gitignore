@@ -1,0 +1,4 @@
+dist/
+# Stray binaries from running `go build` directly at the package root.
+mcp
+statusowl-mcp
