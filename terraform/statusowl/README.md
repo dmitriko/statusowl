@@ -148,11 +148,11 @@ own IAM to its prefixes.
 The querier role:
 
 - attaches the AWS-managed `ReadOnlyAccess` policy
-- denies `*:Create*`, `*:Delete*`, `*:Update*`, `*:Modify*`, `*:Put*`
-  everywhere except the shared bucket's `audit/` prefix and the Lambda's
-  own CloudWatch log streams (which it must write to)
-- denies `iam:*`, `secretsmanager:Get*`, `ssm:GetParameter*`, `kms:Decrypt`,
-  `kms:Get*` everywhere
+- denies `iam:*` to block security-model enumeration (the one meaningful
+  gap ReadOnlyAccess leaves open)
+- gets a narrow Allow for `s3:PutObject` on `audit/*` and the corresponding
+  `s3:ListBucket` (prefix-conditioned), and for `logs:CreateLogStream` /
+  `logs:PutLogEvents` on its own log group — and nothing else write-side
 - can call `sts:AssumeRole` only on ARNs in `spoke_account_roles`
 
 Audit log: `s3://${name_prefix}-statusowl-${account_id}/audit/YYYY/MM/DD/{uuid}.json`

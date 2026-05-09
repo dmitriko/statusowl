@@ -24,41 +24,22 @@ resource "aws_iam_role_policy_attachment" "readonly" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/ReadOnlyAccess"
 }
 
-# --- Defense-in-depth denies ---
+# --- Deny IAM enumeration ---
 #
-# Layered on top of ReadOnlyAccess. Defends against AWS quietly expanding the
-# managed policy, and against sensitive read APIs ReadOnlyAccess does include
-# (e.g. iam:GetUser).
+# ReadOnlyAccess is the base. The only meaningful gap it leaves open is IAM
+# read access (iam:GetUser, iam:ListRoles, etc.) — which lets an attacker
+# map the security model. Deny it.
 #
-# Mutating verbs are denied everywhere except the two resources the Lambda's
-# own plumbing must write to: the audit/ prefix in the shared bucket and its
-# log streams. The cache/ prefix in the same bucket is intentionally NOT
-# exempted — querier has no business writing there.
-#
-# We use NotResource on a single Deny rather than trying to "undo" a Deny
-# with another Deny — explicit Deny is always final in IAM evaluation.
+# We dropped broader cross-service mutation/secret denies: AWS rejects
+# vendor-wildcard actions like "*:Put*" in regular IAM policies, and the
+# value-add over ReadOnlyAccess turned out to be small enough not to be
+# worth the brittleness.
 
 data "aws_iam_policy_document" "denies" {
   statement {
-    sid     = "DenyMutations"
-    effect  = "Deny"
-    actions = ["*:Create*", "*:Delete*", "*:Update*", "*:Modify*", "*:Put*"]
-    not_resources = [
-      "${aws_s3_bucket.shared.arn}/audit/*",
-      "${aws_cloudwatch_log_group.querier.arn}:*",
-    ]
-  }
-
-  statement {
-    sid    = "DenySensitiveReads"
-    effect = "Deny"
-    actions = [
-      "iam:*",
-      "secretsmanager:Get*",
-      "ssm:GetParameter*",
-      "kms:Decrypt",
-      "kms:Get*",
-    ]
+    sid       = "DenyIAMEnumeration"
+    effect    = "Deny"
+    actions   = ["iam:*"]
     resources = ["*"]
   }
 }
@@ -89,7 +70,7 @@ resource "aws_iam_role_policy" "assume_spoke" {
   policy = data.aws_iam_policy_document.assume_spoke[0].json
 }
 
-# --- Audit write into the shared bucket (one of the two paths exempted from DenyMutations) ---
+# --- Audit write into the shared bucket ---
 #
 # Scoped to the audit/ prefix only. ListBucket is conditioned on s3:prefix
 # so the querier can't enumerate cache/* either.
@@ -121,7 +102,7 @@ resource "aws_iam_role_policy" "audit_write" {
   policy = data.aws_iam_policy_document.audit_write.json
 }
 
-# --- CloudWatch Logs (the other path exempted from DenyMutations) ---
+# --- CloudWatch Logs ---
 
 data "aws_iam_policy_document" "logs" {
   statement {

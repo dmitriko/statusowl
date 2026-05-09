@@ -299,9 +299,7 @@ A separate, shorter-TTL result cache (~30s) handles the polling case.
 
 Only component running LLM-generated code.
 
-- **Narrow IAM.** Read-only managed policy plus explicit denies on
-  `*:Create*`, `*:Delete*`, `*:Put*`, `*:Update*`, `*:Modify*`. Defends
-  against AWS quietly expanding ReadOnlyAccess.
+- **Narrow IAM.** ReadOnlyAccess minus IAM enumeration.
 - **No internet egress.** AWS APIs only. Closes "exfiltrate via DNS / HTTP".
 - **Bounded execution.** Hard CPU/memory/time limits.
 - **Audit log.** Every invocation: timestamp, code, args, stdout/stderr,
