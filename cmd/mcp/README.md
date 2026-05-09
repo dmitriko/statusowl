@@ -17,10 +17,12 @@ See [`../../DESIGN.md`](../../DESIGN.md) for the broader architecture.
 
 ## Build
 
+All `make` targets live in the repo-root Makefile and are run from there:
+
 ```sh
-make build-mcp        # writes dist/statusowl-mcp
+make build-mcp        # writes cmd/mcp/dist/statusowl-mcp
 make test-mcp-local   # protocol smoke test (no AWS calls)
-make vet
+make vet-mcp
 ```
 
 ## Configuration

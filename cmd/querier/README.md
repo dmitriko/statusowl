@@ -20,14 +20,16 @@ See `../../DESIGN.md` for the broader architecture.
 
 ## Local dev
 
+All `make` targets live in the repo-root Makefile and are run from there:
+
 ```sh
-uv sync
-make test
-make local-run                                  # uses scripts/sample_event.json
-make local-run EVENT=path/to/your/event.json
+make install-querier
+make test-querier
+make local-run-querier                                  # uses scripts/sample_event.json
+make local-run-querier QUERIER_EVENT=path/to/event.json
 ```
 
-`make local-run` mocks S3 with `moto`; nothing touches real AWS.
+`local-run-querier` mocks S3 with `moto`; nothing touches real AWS.
 
 > **Heads up on subprocess isolation.** `moto` patches boto3 inside the
 > parent process, but the handler runs your code in a child interpreter,
