@@ -1,6 +1,6 @@
 [project]
 name = "querier"
-version = "0.1.0"
+version = "1.0.1"
 description = "statusowl querier Lambda — runs LLM-generated Python under bounded execution with S3 audit log"
 readme = "README.md"
 authors = [
