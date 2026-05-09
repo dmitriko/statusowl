@@ -80,31 +80,40 @@ data "external" "fetch_zip" {
   }
 }
 
-# --- Audit bucket ---
+# --- Shared statusowl bucket ---
+#
+# Single bucket, prefix-separated:
+#   audit/YYYY/MM/DD/{uuid}.json   — querier writes here, never reads
+#   cache/code/{hash}.py           — MCP module (future); querier has no access
+#   cache/result/{hash}.json       — MCP module (future); querier has no access
+#
+# The querier's IAM is scoped to the audit/ prefix; cache/* is intentionally
+# out of reach. Lifecycle rules below cover audit/ only — cache/* TTLs land
+# with the MCP module.
 
-resource "aws_s3_bucket" "audit" {
-  bucket        = "${var.name_prefix}-querier-audit-${data.aws_caller_identity.current.account_id}"
+resource "aws_s3_bucket" "shared" {
+  bucket        = "${var.name_prefix}-statusowl-${data.aws_caller_identity.current.account_id}"
   force_destroy = false
   tags          = var.tags
 }
 
-resource "aws_s3_bucket_ownership_controls" "audit" {
-  bucket = aws_s3_bucket.audit.id
+resource "aws_s3_bucket_ownership_controls" "shared" {
+  bucket = aws_s3_bucket.shared.id
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "audit" {
-  bucket                  = aws_s3_bucket.audit.id
+resource "aws_s3_bucket_public_access_block" "shared" {
+  bucket                  = aws_s3_bucket.shared.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
-  bucket = aws_s3_bucket.audit.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "shared" {
+  bucket = aws_s3_bucket.shared.id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -112,15 +121,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
   }
 }
 
-resource "aws_s3_bucket_versioning" "audit" {
-  bucket = aws_s3_bucket.audit.id
+resource "aws_s3_bucket_versioning" "shared" {
+  bucket = aws_s3_bucket.shared.id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "audit" {
-  bucket = aws_s3_bucket.audit.id
+resource "aws_s3_bucket_lifecycle_configuration" "shared" {
+  bucket = aws_s3_bucket.shared.id
 
   rule {
     id     = "expire-audit-records"
@@ -164,9 +173,9 @@ resource "aws_lambda_function" "querier" {
 
   environment {
     variables = {
-      AUDIT_BUCKET    = aws_s3_bucket.audit.bucket
-      MAX_TIMEOUT_S   = tostring(max(var.lambda_timeout_seconds - 5, 5))
-      ACCOUNTS_CONFIG = jsonencode(var.spoke_account_roles)
+      STATUSOWL_BUCKET = aws_s3_bucket.shared.bucket
+      MAX_TIMEOUT_S    = tostring(max(var.lambda_timeout_seconds - 5, 5))
+      ACCOUNTS_CONFIG  = jsonencode(var.spoke_account_roles)
     }
   }
 

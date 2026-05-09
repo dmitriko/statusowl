@@ -5,7 +5,7 @@ import pytest
 
 from querier import audit
 
-from .conftest import AUDIT_BUCKET
+from .conftest import BUCKET
 
 
 def test_s3_key_format():
@@ -16,11 +16,12 @@ def test_s3_key_format():
 def test_write_puts_record_to_s3(aws):
     record = {"id": "00000000-0000-0000-0000-000000000001", "code": "print(1)"}
     key = audit.write(record)
-    body = json.loads(aws.get_object(Bucket=AUDIT_BUCKET, Key=key)["Body"].read())
+    body = json.loads(aws.get_object(Bucket=BUCKET, Key=key)["Body"].read())
     assert body == record
+    assert key.startswith("audit/")
 
 
 def test_write_without_bucket_env_raises(monkeypatch):
-    monkeypatch.delenv("AUDIT_BUCKET", raising=False)
-    with pytest.raises(RuntimeError, match="AUDIT_BUCKET"):
+    monkeypatch.delenv("STATUSOWL_BUCKET", raising=False)
+    with pytest.raises(RuntimeError, match="STATUSOWL_BUCKET"):
         audit.write({"id": "x"})

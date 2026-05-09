@@ -13,7 +13,12 @@ output "role_arn" {
   value       = aws_iam_role.querier.arn
 }
 
-output "audit_bucket_name" {
-  description = "Name of the audit S3 bucket."
-  value       = aws_s3_bucket.audit.bucket
+output "bucket_name" {
+  description = "Name of the shared statusowl bucket (querier writes audit/, MCP will use cache/)."
+  value       = aws_s3_bucket.shared.bucket
+}
+
+output "bucket_arn" {
+  description = "ARN of the shared statusowl bucket. Exposed for the future MCP module to scope its IAM to cache/* prefixes."
+  value       = aws_s3_bucket.shared.arn
 }

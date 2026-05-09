@@ -9,8 +9,9 @@ from __future__ import annotations
 import os
 
 
-def audit_bucket() -> str:
-    return os.environ.get("AUDIT_BUCKET", "")
+def bucket() -> str:
+    """The shared statusowl bucket. Querier writes only under the audit/ prefix."""
+    return os.environ.get("STATUSOWL_BUCKET", "")
 
 
 def accounts_config() -> str:

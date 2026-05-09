@@ -31,7 +31,10 @@ resource "aws_iam_role_policy_attachment" "readonly" {
 # (e.g. iam:GetUser).
 #
 # Mutating verbs are denied everywhere except the two resources the Lambda's
-# own plumbing must write to: the audit-bucket prefix and its log streams.
+# own plumbing must write to: the audit/ prefix in the shared bucket and its
+# log streams. The cache/ prefix in the same bucket is intentionally NOT
+# exempted — querier has no business writing there.
+#
 # We use NotResource on a single Deny rather than trying to "undo" a Deny
 # with another Deny — explicit Deny is always final in IAM evaluation.
 
@@ -41,7 +44,7 @@ data "aws_iam_policy_document" "denies" {
     effect  = "Deny"
     actions = ["*:Create*", "*:Delete*", "*:Update*", "*:Modify*", "*:Put*"]
     not_resources = [
-      "${aws_s3_bucket.audit.arn}/audit/*",
+      "${aws_s3_bucket.shared.arn}/audit/*",
       "${aws_cloudwatch_log_group.querier.arn}:*",
     ]
   }
@@ -86,21 +89,24 @@ resource "aws_iam_role_policy" "assume_spoke" {
   policy = data.aws_iam_policy_document.assume_spoke[0].json
 }
 
-# --- Audit bucket write (one of the two paths exempted from DenyMutations) ---
+# --- Audit write into the shared bucket (one of the two paths exempted from DenyMutations) ---
+#
+# Scoped to the audit/ prefix only. ListBucket is conditioned on s3:prefix
+# so the querier can't enumerate cache/* either.
 
 data "aws_iam_policy_document" "audit_write" {
   statement {
     sid       = "AuditPutObject"
     effect    = "Allow"
     actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.audit.arn}/audit/*"]
+    resources = ["${aws_s3_bucket.shared.arn}/audit/*"]
   }
 
   statement {
     sid       = "AuditListBucket"
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.audit.arn]
+    resources = [aws_s3_bucket.shared.arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"

@@ -125,21 +125,40 @@ function_zip_path  >  function_zip_url  >  archive_file (built-in default)
 The module deterministically picks one; setting more than one is allowed but
 only the highest-precedence value takes effect.
 
+## Storage layout
+
+A single S3 bucket — `${name_prefix}-statusowl-${account_id}` — backs all
+statusowl components. Prefix-separated, IAM-segmented:
+
+| Prefix              | Writer  | Lifecycle                     |
+|---------------------|---------|-------------------------------|
+| `audit/YYYY/MM/DD/` | querier | `audit_retention_days` (90d)  |
+| `cache/code/`       | MCP*    | (lands with the MCP module)   |
+| `cache/result/`     | MCP*    | (lands with the MCP module)   |
+
+\* MCP module not implemented yet — `cache/*` paths are reserved.
+
+The querier's IAM is scoped to `audit/*` only; it has no read or write
+access to `cache/*`. The bucket name and ARN are exposed as outputs
+(`bucket_name`, `bucket_arn`) so the future MCP sub-module can scope its
+own IAM to its prefixes.
+
 ## Security boundary recap
 
 The querier role:
 
 - attaches the AWS-managed `ReadOnlyAccess` policy
 - denies `*:Create*`, `*:Delete*`, `*:Update*`, `*:Modify*`, `*:Put*`
-  everywhere except the audit-bucket `audit/` prefix and the Lambda's own
-  CloudWatch log streams (which it must write to)
+  everywhere except the shared bucket's `audit/` prefix and the Lambda's
+  own CloudWatch log streams (which it must write to)
 - denies `iam:*`, `secretsmanager:Get*`, `ssm:GetParameter*`, `kms:Decrypt`,
   `kms:Get*` everywhere
 - can call `sts:AssumeRole` only on ARNs in `spoke_account_roles`
 
-Audit log: `s3://<audit-bucket>/audit/YYYY/MM/DD/{uuid}.json` — one record
-per invocation including the generated code, args, stdout/stderr, duration,
-and caller identity. Retention is `audit_retention_days` (default 90).
+Audit log: `s3://${name_prefix}-statusowl-${account_id}/audit/YYYY/MM/DD/{uuid}.json`
+— one record per invocation including the generated code, args,
+stdout/stderr, duration, and caller identity. Retention is
+`audit_retention_days` (default 90).
 
 ## Inputs / outputs
 

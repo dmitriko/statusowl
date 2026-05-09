@@ -17,13 +17,13 @@ def s3_key(record_id: str, when: datetime | None = None) -> str:
 
 
 def write(record: dict[str, Any]) -> str:
-    bucket = config.audit_bucket()
-    if not bucket:
-        raise RuntimeError("AUDIT_BUCKET env var is not set")
+    bucket_name = config.bucket()
+    if not bucket_name:
+        raise RuntimeError("STATUSOWL_BUCKET env var is not set")
 
     key = s3_key(record["id"])
     boto3.client("s3").put_object(
-        Bucket=bucket,
+        Bucket=bucket_name,
         Key=key,
         Body=json.dumps(record, default=str).encode("utf-8"),
         ContentType="application/json",

@@ -2,7 +2,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-AUDIT_BUCKET = "statusowl-test-audit"
+BUCKET = "statusowl-test"
 
 
 @pytest.fixture(autouse=True)
@@ -15,8 +15,8 @@ def _aws_creds(monkeypatch):
 
 @pytest.fixture
 def aws(monkeypatch):
-    monkeypatch.setenv("AUDIT_BUCKET", AUDIT_BUCKET)
+    monkeypatch.setenv("STATUSOWL_BUCKET", BUCKET)
     with mock_aws():
         s3 = boto3.client("s3", region_name="us-east-1")
-        s3.create_bucket(Bucket=AUDIT_BUCKET)
+        s3.create_bucket(Bucket=BUCKET)
         yield s3

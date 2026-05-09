@@ -1,4 +1,4 @@
-"""Run the querier handler locally with a moto-mocked S3 audit bucket.
+"""Run the querier handler locally with a moto-mocked statusowl bucket.
 
     cat event.json | uv run python scripts/invoke_local.py
     uv run python scripts/invoke_local.py --event scripts/sample_event.json
@@ -14,7 +14,7 @@ import sys
 import boto3
 from moto import mock_aws
 
-DEFAULT_BUCKET = "statusowl-local-audit"
+DEFAULT_BUCKET = "statusowl-local"
 
 
 def main() -> int:
@@ -32,7 +32,7 @@ def main() -> int:
     os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
     os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
     os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
-    os.environ["AUDIT_BUCKET"] = args.bucket
+    os.environ["STATUSOWL_BUCKET"] = args.bucket
 
     with mock_aws():
         s3 = boto3.client("s3", region_name="us-east-1")
@@ -43,7 +43,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, default=str))
 
         listing = s3.list_objects_v2(Bucket=args.bucket).get("Contents", [])
-        print(f"\n--- audit bucket: {args.bucket} ---", file=sys.stderr)
+        print(f"\n--- bucket: {args.bucket} ---", file=sys.stderr)
         for obj in listing:
             print(obj["Key"], file=sys.stderr)
 

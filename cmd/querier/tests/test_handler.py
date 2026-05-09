@@ -2,7 +2,7 @@ import json
 
 from querier import handler
 
-from .conftest import AUDIT_BUCKET
+from .conftest import BUCKET
 
 
 def test_happy_path_runs_and_audits(aws):
@@ -12,7 +12,7 @@ def test_happy_path_runs_and_audits(aws):
     assert resp["exit_code"] == 0
     assert resp["audit_id"]
 
-    obj = aws.get_object(Bucket=AUDIT_BUCKET, Key=resp["audit_key"])
+    obj = aws.get_object(Bucket=BUCKET, Key=resp["audit_key"])
     record = json.loads(obj["Body"].read())
     assert record["code"] == "print('ok')"
     assert record["stdout"].strip() == "ok"
@@ -51,7 +51,7 @@ def test_timeout_recorded_in_audit(aws):
     assert resp["timed_out"] is True
     assert resp["ok"] is False
 
-    record = json.loads(aws.get_object(Bucket=AUDIT_BUCKET, Key=resp["audit_key"])["Body"].read())
+    record = json.loads(aws.get_object(Bucket=BUCKET, Key=resp["audit_key"])["Body"].read())
     assert record["timed_out"] is True
     assert "timeout" in record["stderr"].lower()
 
@@ -59,5 +59,5 @@ def test_timeout_recorded_in_audit(aws):
 def test_default_timeout_used_when_omitted(aws):
     resp = handler.lambda_handler({"code": "print('x')"}, None)
     assert resp["ok"] is True
-    record = json.loads(aws.get_object(Bucket=AUDIT_BUCKET, Key=resp["audit_key"])["Body"].read())
+    record = json.loads(aws.get_object(Bucket=BUCKET, Key=resp["audit_key"])["Body"].read())
     assert record["args"]["timeout_seconds"] == 30  # DEFAULT_TIMEOUT_S default

@@ -37,13 +37,17 @@ make local-run EVENT=path/to/your/event.json
 
 ## Environment variables
 
-| Var                | Default | Purpose                                     |
-|--------------------|---------|---------------------------------------------|
-| `AUDIT_BUCKET`     | (req'd) | S3 bucket for `audit/YYYY/MM/DD/{uuid}.json`|
-| `ACCOUNTS_CONFIG`  | `""`    | JSON: `{"prod": "arn:aws:iam::...:role/..."}` |
-| `MAX_TIMEOUT_S`    | `60`    | Hard upper bound for `timeout_seconds`      |
-| `DEFAULT_TIMEOUT_S`| `30`    | Used when event omits `timeout_seconds`     |
-| `MEM_LIMIT_MB`     | unset   | RLIMIT_AS for the child (Linux only)        |
+| Var                | Default | Purpose                                                  |
+|--------------------|---------|----------------------------------------------------------|
+| `STATUSOWL_BUCKET` | (req'd) | Shared statusowl bucket. Querier writes only `audit/*`.  |
+| `ACCOUNTS_CONFIG`  | `""`    | JSON: `{"prod": "arn:aws:iam::...:role/..."}`            |
+| `MAX_TIMEOUT_S`    | `60`    | Hard upper bound for `timeout_seconds`                   |
+| `DEFAULT_TIMEOUT_S`| `30`    | Used when event omits `timeout_seconds`                  |
+| `MEM_LIMIT_MB`     | unset   | RLIMIT_AS for the child (Linux only)                     |
+
+Audit objects are written to `audit/YYYY/MM/DD/{uuid}.json` inside the
+bucket. The `cache/` prefix in the same bucket is reserved for the future
+MCP module — querier IAM has no access to it.
 
 ## Layout
 

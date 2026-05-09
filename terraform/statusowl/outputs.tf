@@ -13,7 +13,12 @@ output "querier_role_arn" {
   value       = module.querier.role_arn
 }
 
-output "audit_bucket_name" {
-  description = "Name of the S3 bucket holding querier audit records."
-  value       = module.querier.audit_bucket_name
+output "bucket_name" {
+  description = "Name of the shared statusowl bucket (querier writes audit/, MCP will use cache/)."
+  value       = module.querier.bucket_name
+}
+
+output "bucket_arn" {
+  description = "ARN of the shared statusowl bucket."
+  value       = module.querier.bucket_arn
 }
