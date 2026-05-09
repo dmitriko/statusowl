@@ -31,14 +31,30 @@ variable "lambda_timeout_seconds" {
   default     = 90
 }
 
+variable "function_zip_url" {
+  description = "URL to fetch the Lambda zip from. Verified against function_zip_sha256 if set."
+  type        = string
+  default     = null
+}
+
+variable "function_zip_sha256" {
+  description = "Hex-encoded SHA-256 expected for the zip downloaded from function_zip_url."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.function_zip_sha256 == null || can(regex("^[0-9a-fA-F]{64}$", var.function_zip_sha256))
+    error_message = "function_zip_sha256 must be a 64-char hex SHA-256."
+  }
+}
+
 variable "function_zip_path" {
-  description = "Path to a pre-built Lambda deployment zip. Null = build via archive_file."
+  description = "Local path to a pre-built Lambda zip (highest precedence)."
   type        = string
   default     = null
 }
 
 variable "function_source_dir" {
-  description = "Source dir to zip when function_zip_path is null. Null = default in-repo path."
+  description = "Source dir to zip when no zip path/URL is given. Null = default in-repo path."
   type        = string
   default     = null
 }

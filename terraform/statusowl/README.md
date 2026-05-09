@@ -25,9 +25,11 @@ module "statusowl" {
   lambda_memory_mb       = 512
   lambda_timeout_seconds = 90
 
-  # In CI: build the zip in your pipeline, set its path here.
-  # Locally: leave null and the module zips cmd/querier/src/ for you.
-  function_zip_path = null
+  # See "Choosing a Lambda artifact source" below. Production: pin a release
+  # URL + SHA-256. CI: pre-build and pass `function_zip_path`. Dev: leave
+  # all three of the function_zip_* / function_source_dir vars unset.
+  function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/querier-v0.1.0/querier.zip"
+  function_zip_sha256 = "<paste from querier.zip.sha256 in the release>"
 }
 
 output "querier_role_arn" {
@@ -71,28 +73,57 @@ resource "aws_iam_role_policy_attachment" "readonly" {
 Once the spoke role exists, add it to `spoke_account_roles` in the hub-side
 module block and re-apply.
 
-## Building the Lambda zip
+## Choosing a Lambda artifact source
 
-Two paths.
+Three paths, in order of recommendation.
 
-**Default — `function_zip_path = null`.** The module's `archive_file` data
-source zips `cmd/querier/src/` at plan time. Convenient for iteration. Has
-the usual `archive_file` caveats: it runs every plan, the hash drifts as
-local files do, and it doesn't reproduce in CI.
+### 1. Production — pin a release URL + SHA-256
 
-**CI — build the zip yourself, pass `function_zip_path`.**
+Each `querier-v*` tag publishes a deterministic `querier.zip` and a sidecar
+`querier.zip.sha256` to GitHub Releases. Pin both:
 
-```sh
-cd cmd/querier
-mkdir -p build/pkg
-cp -r src/querier build/pkg/
-# (Add `uv pip install --target build/pkg -r requirements.txt` if you ever
-# add runtime deps. boto3 is provided by Lambda; nothing else today.)
-( cd build/pkg && zip -r ../querier.zip . )
+```hcl
+function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/querier-v0.1.0/querier.zip"
+function_zip_sha256 = "489bfd84fe2041b00906dd5b668777eed26eea08417154ba5a0d4c7630c65448"
 ```
 
-…then point the module at `cmd/querier/build/querier.zip`. Stable hash,
-faster plans, no archive_file surprises.
+The module fetches the zip at plan time and refuses to deploy if the SHA-256
+doesn't match. The release notes include a copy-pasteable HCL snippet.
+
+### 2. CI — build the zip yourself, pass `function_zip_path`
+
+For air-gapped setups, internal artifact mirrors, or pipelines that want
+release artifacts to come from their own build infrastructure. Use the same
+script the release workflow uses, so artifacts are bit-identical:
+
+```sh
+./scripts/build-querier.sh
+# writes cmd/querier/build/querier.zip + querier.zip.sha256
+```
+
+Then in your root module:
+
+```hcl
+function_zip_path = "${path.module}/cmd/querier/build/querier.zip"
+```
+
+`function_zip_path` takes precedence over `function_zip_url` if both are set.
+
+### 3. Development — let the module zip the source tree
+
+When neither `function_zip_url` nor `function_zip_path` is set, the module's
+`archive_file` data source zips `cmd/querier/src/` at plan time. Convenient
+while iterating locally; the hash drifts as you edit files, every plan
+rebuilds, and it isn't reproducible across machines. Don't use in CI.
+
+### Precedence
+
+```
+function_zip_path  >  function_zip_url  >  archive_file (built-in default)
+```
+
+The module deterministically picks one; setting more than one is allowed but
+only the highest-precedence value takes effect.
 
 ## Security boundary recap
 

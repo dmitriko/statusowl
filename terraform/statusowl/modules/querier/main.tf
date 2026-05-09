@@ -4,24 +4,33 @@ data "aws_partition" "current" {}
 locals {
   function_name = "${var.name_prefix}-querier"
 
-  # When this module is consumed in-repo, cmd/querier/src lives four levels up
-  # from terraform/statusowl/modules/querier/. Override `function_source_dir`
-  # if your layout differs.
+  # Source selection. Precedence: explicit path > URL fetch > archive_file build.
+  use_zip_path = var.function_zip_path != null
+  use_zip_url  = !local.use_zip_path && var.function_zip_url != null
+  use_archive  = !local.use_zip_path && !local.use_zip_url
+
+  # Default in-repo source dir, used only by the archive_file path.
   default_source_dir = "${path.module}/../../../../cmd/querier/src"
   source_dir         = coalesce(var.function_source_dir, local.default_source_dir)
 
-  build_zip = var.function_zip_path == null
-
-  # Conditional expressions short-circuit, so filebase64sha256 is only called
-  # when build_zip is false (and the file therefore must exist).
-  zip_path = local.build_zip ? data.archive_file.querier[0].output_path : var.function_zip_path
-  zip_hash = local.build_zip ? data.archive_file.querier[0].output_base64sha256 : filebase64sha256(var.function_zip_path)
+  # Conditional expressions short-circuit, so each branch's references are
+  # only evaluated when its mode is active.
+  zip_path = (
+    local.use_zip_path ? var.function_zip_path :
+    local.use_zip_url ? data.external.fetch_zip[0].result.path :
+    data.archive_file.querier[0].output_path
+  )
+  zip_hash = (
+    local.use_zip_path ? filebase64sha256(var.function_zip_path) :
+    local.use_zip_url ? data.external.fetch_zip[0].result.sha256_b64 :
+    data.archive_file.querier[0].output_base64sha256
+  )
 }
 
-# --- Lambda zip (default; CI users set var.function_zip_path) ---
+# --- Source A: archive_file builds from local source (development default) ---
 
 data "archive_file" "querier" {
-  count = local.build_zip ? 1 : 0
+  count = local.use_archive ? 1 : 0
 
   type        = "zip"
   source_dir  = local.source_dir
@@ -44,18 +53,36 @@ data "archive_file" "querier" {
         Resolved source_dir: ${local.source_dir}
 
         Fix one of:
+          - set `function_zip_url` to a published release asset
+          - set `function_zip_path` to a pre-built zip from your CI
           - set `function_source_dir` to the directory that contains the
-            `querier/` package (the package, not the file)
-          - or pre-build the zip in CI and pass `function_zip_path = "..."`
+            `querier/` package
       EOT
     }
+  }
+}
+
+# --- Source B: external script fetches from URL and verifies SHA-256 ---
+#
+# Runs at plan time. On SHA-256 mismatch the script exits non-zero and
+# Terraform reports a plan error — a tampered or wrong-version artifact
+# never makes it into source_code_hash.
+
+data "external" "fetch_zip" {
+  count = local.use_zip_url ? 1 : 0
+
+  program = ["python3", "${path.module}/scripts/fetch-zip.py"]
+
+  query = {
+    url          = var.function_zip_url
+    expected_sha = var.function_zip_sha256 == null ? "" : var.function_zip_sha256
+    output_path  = "${path.module}/.build/querier-fetched.zip"
   }
 }
 
 # --- Audit bucket ---
 
 resource "aws_s3_bucket" "audit" {
-  # Suffix with the account id so name_prefix doesn't have to be globally unique.
   bucket        = "${var.name_prefix}-querier-audit-${data.aws_caller_identity.current.account_id}"
   force_destroy = false
   tags          = var.tags

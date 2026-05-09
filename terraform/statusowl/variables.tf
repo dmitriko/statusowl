@@ -39,12 +39,36 @@ variable "lambda_timeout_seconds" {
   default     = 90
 }
 
+variable "function_zip_url" {
+  description = <<-EOT
+    URL to fetch the Lambda zip from. Recommended for production: pin to a
+    versioned `querier-v*` GitHub release asset. The module fetches at plan
+    time and verifies the SHA-256 if `function_zip_sha256` is set.
+    Ignored when `function_zip_path` is also set.
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "function_zip_sha256" {
+  description = <<-EOT
+    Hex-encoded SHA-256 of the zip fetched via `function_zip_url`. Strongly
+    recommended for production: the module refuses to deploy on mismatch.
+    No effect when `function_zip_url` is null.
+  EOT
+  type        = string
+  default     = null
+  validation {
+    condition     = var.function_zip_sha256 == null || can(regex("^[0-9a-fA-F]{64}$", var.function_zip_sha256))
+    error_message = "function_zip_sha256 must be a 64-char hex SHA-256."
+  }
+}
+
 variable "function_zip_path" {
   description = <<-EOT
-    Path to a pre-built Lambda deployment zip. Recommended for CI: build the
-    zip in your pipeline, set this to its path. If null, the module builds a
-    zip from `function_source_dir` via the archive_file data source — fine
-    for local dev, not great for reproducible CI.
+    Local path to a pre-built Lambda zip. Highest precedence — overrides
+    `function_zip_url` and the built-in source build. Useful for CI that
+    builds the zip in-pipeline, or for air-gapped/mirror setups.
   EOT
   type        = string
   default     = null
@@ -52,9 +76,9 @@ variable "function_zip_path" {
 
 variable "function_source_dir" {
   description = <<-EOT
-    Source directory to zip when `function_zip_path` is null. Defaults inside
-    the sub-module to the in-repo cmd/querier/src layout; override if you've
-    vendored or relocated the source tree.
+    Source directory the module zips when neither `function_zip_path` nor
+    `function_zip_url` is set. Defaults to the in-repo `cmd/querier/src`
+    layout; override if you've vendored or relocated the source tree.
   EOT
   type        = string
   default     = null
