@@ -1,0 +1,38 @@
+[project]
+name = "querier"
+version = "0.1.0"
+description = "statusowl querier Lambda — runs LLM-generated Python under bounded execution with S3 audit log"
+readme = "README.md"
+authors = [
+    { name = "DmitriKo", email = "dmitrikozhevin@gmail.com" }
+]
+requires-python = ">=3.12"
+# boto3 is provided by the Lambda runtime; we keep runtime deps empty so the
+# deploy bundle stays tiny. Local dev pulls boto3 via the dev group below.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "boto3>=1.34",
+    "moto[s3,sts]>=5.0",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/querier"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,0 +1,4 @@
+{
+  "code": "import os, platform\nprint('python:', platform.python_version())\nprint('aws_region:', os.environ.get('AWS_REGION'))\nprint('hello from the querier sandbox')\n",
+  "timeout_seconds": 5
+}
