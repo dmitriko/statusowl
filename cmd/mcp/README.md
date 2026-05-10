@@ -1,9 +1,10 @@
 # statusowl-mcp
 
 A Model Context Protocol server that exposes the deployed statusowl querier
-Lambda as MCP tools. Stdio-only for now; runs on the user's machine and is
-registered with Claude Code as a local MCP server. Lambda + Function URL
-deployment will land once the tool surface stabilizes.
+Lambda as MCP tools. Stdio-only for now; runs on the user's machine and can
+be registered with any MCP-capable client. The examples below use Claude
+Code. Lambda + Function URL deployment will land once the tool surface
+stabilizes.
 
 See [`../../DESIGN.md`](../../DESIGN.md) for the broader architecture.
 
@@ -58,14 +59,14 @@ Python — `lambda:InvokeFunction` is just the call-the-querier permission.
 
 The same binary handles both:
 
-- **Local stdio** — Claude Code spawns the binary, talks to it over
+- **Local stdio** — your MCP client spawns the binary and talks to it over
   stdin/stdout. Requires the user's local AWS creds. The path of least
   setup; great for development.
 - **Remote Lambda + Function URL** — the server runs in AWS Lambda, fronted
-  by a Function URL with `AuthType = AWS_IAM`. Claude Code reaches it over
-  HTTPS using SigV4. Deploy with the `terraform/statusowl` module
-  (`enable_mcp = true`); see `terraform/statusowl/README.md` for the
-  artifact-source choices.
+  by a Function URL with `AuthType = AWS_IAM`. MCP clients can reach it over
+  HTTPS; Claude Code can SigV4-sign with local AWS creds out of the box.
+  Deploy with the `terraform/statusowl` module (`enable_mcp = true`); see
+  `terraform/statusowl/README.md` for the artifact-source choices.
 
 The MCP server detects mode automatically: if `AWS_LAMBDA_FUNCTION_NAME` is
 set (Lambda runtime sets it), it serves Streamable HTTP; otherwise it

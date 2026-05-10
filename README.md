@@ -1,6 +1,6 @@
 # statusowl
 
-A read-only AWS investigation agent for Claude Code.
+A read-only AWS investigation agent for MCP-capable coding agents. We use Claude Code mostly.
 
 [**See the design and the reasoning →**](./DESIGN.md)
 
@@ -8,15 +8,17 @@ A read-only AWS investigation agent for Claude Code.
 
 ## What it actually does
 
-You ask Claude Code about your AWS environment in plain English. statusowl
-makes Claude run sandboxed Python (boto3, narrow IAM) against your account
-and synthesize an answer. It investigates instead of just listing.
+You ask your coding agent about your AWS environment in plain English.
+statusowl makes it run sandboxed Python (boto3, narrow IAM) against your
+account and synthesize an answer. It investigates instead of just listing.
+The examples below use Claude Code, but the MCP server is standard and can
+be used from other MCP-capable agents too.
 
 A real example, lightly anonymized:
 
 > **You:** what is the current status of the ecs cluster `preview`?
 
-> **Claude (via statusowl):**
+> **Agent (via statusowl):**
 >
 > Cluster `preview` — ACTIVE
 > Fargate-only · Container Insights enabled
@@ -45,7 +47,7 @@ pattern across envs. One round trip.
 ## Why it's safe
 
 LLM-generated code is genuinely scary in an AWS account. statusowl's design
-puts a real boundary between Claude and your infrastructure:
+puts a real boundary between the model and your infrastructure:
 
 - **Querier Lambda** runs every line of model-written Python. Read-only IAM
   managed policy, plus an explicit deny on `iam:*` to prevent enumerating
@@ -57,14 +59,13 @@ puts a real boundary between Claude and your infrastructure:
   querier and that's the only path.
 
 You can rotate, delete, or scope the querier role without touching anything
-else. No "Claude on my laptop with my dev creds" for any AWS read.
+else. No "agent on my laptop with my dev creds" for any AWS read.
 
 ---
 
 ## Quickstart
 
-Two parts: deploy the Lambda, then point Claude Code at it via a local MCP
-server.
+Two parts: deploy the Lambda, then point your coding agent at it via MCP.
 
 ### 1. Deploy the Lambda
 
@@ -76,11 +77,11 @@ In your existing Terraform (or a fresh root module):
 
 ```hcl
 module "statusowl" {
-  source = "github.com/dmitriko/statusowl//terraform/statusowl?ref=querier-v0.1.0"
+  source = "github.com/dmitriko/statusowl//terraform/statusowl?ref=querier-v1.0.2"
 
   name_prefix         = "myteam"
-  function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/querier-v0.1.0/querier.zip"
-  function_zip_sha256 = "<paste SHA from the release page>"
+  function_zip_url    = "https://github.com/dmitriko/statusowl/releases/download/querier-v1.0.2/querier.zip"
+  function_zip_sha256 = "7e709b86b5e870d5b76cc271b274f8209a15c1f99354bfaa3cdb8fb5d148f858"
 
   spoke_account_roles  = {}    # empty for single-account; see below for multi-account
   audit_retention_days = 90
@@ -114,10 +115,10 @@ The audit record now lives in S3.
 
 ### 2. Run the MCP server locally
 
-**Prereqs:** Claude Code installed; AWS credentials on your machine with
-`lambda:InvokeFunction` permission on the deployed querier; a binary from
-the [releases page](https://github.com/dmitriko/statusowl/releases) or a Go
-toolchain to build from source.
+**Prereqs:** an MCP-capable coding agent; AWS credentials on your machine
+with `lambda:InvokeFunction` permission on the deployed querier; a binary
+from the [releases page](https://github.com/dmitriko/statusowl/releases) or
+a Go toolchain to build from source.
 
 Download the `statusowl-mcp` binary for your platform from the releases
 page, or build:
@@ -128,9 +129,9 @@ cd statusowl/cmd/mcp && make build-mcp
 # binary lands at ./dist/statusowl-mcp
 ```
 
-Register the server with Claude Code. In `~/.claude.json`, locate
-`projects[<your-project-path>]` and add an `mcpServers` entry inside that
-project object:
+Register the server with your agent's MCP client. For Claude Code, in
+`~/.claude.json`, locate `projects[<your-project-path>]` and add an
+`mcpServers` entry inside that project object:
 
 ```json
 "mcpServers": {
@@ -144,7 +145,7 @@ project object:
 }
 ```
 
-Restart Claude Code. From a session in that project:
+Restart your agent if needed. From a Claude Code session in that project:
 
 ```
 > use statusowl to print the AWS caller identity
@@ -204,8 +205,7 @@ For the design and the reasoning behind every choice, see
 - **`statusowl-querier`** (Python Lambda) — runs LLM-generated code under
   narrow IAM. Audit log to S3. The security boundary.
 - **`statusowl-mcp`** (Go) — MCP server. Currently runs locally; soon
-  Lambda-deployable. Translates Claude Code tool calls into querier
-  invocations.
+  Lambda-deployable. Translates MCP tool calls into querier invocations.
 - **`statusowl-slack`** (planned) — a Slack connector for the same pipeline,
   so non-developer teammates can ask questions too.
 
