@@ -208,10 +208,13 @@ For the design and the reasoning behind every choice, see
 
 - **`statusowl-querier`** (Python Lambda) — runs LLM-generated code under
   narrow IAM. Audit log to S3. The security boundary.
-- **`statusowl-mcp`** (Go) — MCP server. Currently runs locally; soon
-  Lambda-deployable. Translates MCP tool calls into querier invocations.
-- **`statusowl-slack`** (planned) — a Slack connector for the same pipeline,
-  so non-developer teammates can ask questions too.
+- **`statusowl-mcp`** (Go) — MCP server. Runs as a local stdio binary or
+  as a Lambda fronted by an IAM-authenticated Function URL. Translates MCP
+  tool calls into querier invocations.
+
+A native Slack connector was scoped out — MCP-capable coding agents already
+cover the chat surface well, and adding a second front door bloats the
+trust model without adding capability.
 
 ---
 

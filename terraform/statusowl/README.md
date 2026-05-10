@@ -1,8 +1,7 @@
 # statusowl Terraform module
 
-Provisions the statusowl read-only AWS-investigation engine. Today: querier
-Lambda + MCP server (Lambda + Function URL, opt-in). Slack will land as the
-last sub-module.
+Provisions the statusowl read-only AWS-investigation engine: querier
+Lambda plus the MCP server (Lambda + Function URL, opt-in via `enable_mcp`).
 
 See [`../../DESIGN.md`](../../DESIGN.md) for the broader architecture.
 

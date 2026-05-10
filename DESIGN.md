@@ -2,8 +2,8 @@
 
 Repo: `github.com/dmitriko/statusowl` (public, MIT)
 
-A read-only agent for inspecting AWS environments. Consumed through Claude
-Code via MCP and Skills, with a thin Slack adapter for non-technical users.
+A read-only agent for inspecting AWS environments. Consumed through any
+MCP-capable coding agent (we use Claude Code) via MCP and Skills.
 
 ---
 
@@ -18,6 +18,8 @@ Code via MCP and Skills, with a thin Slack adapter for non-technical users.
 ## Non-goals
 
 - Mutate anything. Reads only.
+- Native chat connectors (Slack, etc.). MCP-capable coding agents already
+  cover this surface; chat-only users can pair with a teammate using one.
 
 ---
 
@@ -30,10 +32,11 @@ Two ideas the design rests on:
    through PR review, like any other team artifact. Not a database, not a
    UI, not a runtime API.
 
-2. **The engine is three Lambdas.** `statusowl-slack` receives chat events,
-   `statusowl-mcp` serves tools, `statusowl-querier` runs LLM-generated code.
-   Each has its own IAM role; none stores state. Everything persistent
-   (skills, registry, audit log) lives in Git or S3.
+2. **The engine is two Lambdas.** `statusowl-mcp` serves MCP tools to
+   coding agents, `statusowl-querier` runs LLM-generated code. Each has its
+   own IAM role; neither stores state. Everything persistent (skills,
+   registry, audit log) lives in Git or S3. The MCP server can also run as
+   a local stdio binary for development.
 
 ---
 
@@ -42,14 +45,12 @@ Two ideas the design rests on:
 User journey, three stages. Each is a skill in the template repo.
 
 1. **Bootstrap.** Clone template, `cd`, run claude, type "bootstrap." The
-   skill orients the user, confirms inputs (Slack? multi-account?), and
-   writes a `module "statusowl"` block ready to drop into their existing
-   Terraform.
+   skill orients the user, confirms inputs (multi-account?), and writes a
+   `module "statusowl"` block ready to drop into their existing Terraform.
 
 2. **Deploy.** User adds the module to their TF, runs `terraform apply`.
-   One module covers querier (always), MCP (optional), Slack (optional).
-   Outputs include role ARNs the user wires into spoke accounts' trust
-   policies.
+   One module covers querier (always) and MCP (optional). Outputs include
+   role ARNs the user wires into spoke accounts' trust policies.
 
 3. **Build registry.** Skill uses the deployed querier to walk AWS
    (LLM-generated Python, narrow IAM, no shell composition). Proposes
@@ -66,51 +67,41 @@ the registry.
 
 ```
                    ┌──────────────────────┐
-                   │ statusowl-registry    │  CLI: init / sync / validate
+                   │ statusowl-registry   │  CLI: init / sync / validate
                    └──────────┬───────────┘
                               ▼
                    GitHub config repo
                    (registry.yaml, accounts.yaml, skills)
                               │
-                  ┌───────────┴───────────┐
-                  ▼                       ▼
-            read by MCP             loaded by Claude Code (auto)
-                                    loaded by Slack agent (via prompt)
-
-   ┌─────────────────────┐
-   │ statusowl-slack      │  Go Lambda. Slack ⇄ MCP glue.
-   │ (Slack connector)   │
-   └──────────┬──────────┘
-              │ MCP
-   Claude     │
-   Code  ─────┼────────▶ ┌──────────────────────┐
-              ▼          │ statusowl-mcp         │  Go Lambda. Hot path.
-                         │ (MCP server)         │  Reads registry. Read-only AWS.
-                         └────┬───────────┬─────┘
-                              │           │ run_python (invoke)
-                         read │           ▼
-                         AWS  │   ┌────────────────────┐
-                              │   │ statusowl-querier   │  Python Lambda.
-                              │   │ (query executor)   │  Narrow IAM. Audit log.
-                              │   └────────────────────┘
                               ▼
-                           AWS APIs
+                  read by MCP, loaded by the
+                  coding agent automatically
+
+   Coding agent ──── MCP ─────▶ ┌──────────────────────┐
+   (Claude Code,                │ statusowl-mcp        │  Go. Lambda + Function URL,
+    other MCP clients)          │ (MCP server)         │  or local stdio. Reads registry.
+                                └────┬───────────┬─────┘
+                                     │           │ run_python (invoke)
+                                read │           ▼
+                                AWS  │   ┌────────────────────┐
+                                     │   │ statusowl-querier  │  Python Lambda.
+                                     │   │ (query executor)   │  Narrow IAM. Audit log.
+                                     │   └────────────────────┘
+                                     ▼
+                                  AWS APIs
 ```
 
-### Why three Lambdas
+### Why two Lambdas
 
-- **Slack vs MCP.** Slack has a 3-second ack window and channel-listening
-  semantics; MCP has tool-call semantics. Different shapes; combining them
-  bloats either.
-- **MCP vs querier.** MCP runs handwritten, reviewed code. Querier runs
-  LLM-generated Python under narrow IAM. Different trust levels need
-  different IAM roles, which means different Lambdas.
+MCP runs handwritten, reviewed code. Querier runs LLM-generated Python
+under narrow IAM. Different trust levels need different IAM roles, which
+means different Lambdas.
 
 ### Why MCP + Skills
 
 Team-specific knowledge lives in *Skills*; team-specific execution logic
-lives in MCP *tools*. Both are portable: Claude Code and the Slack agent
-consume the same skills and the same MCP server.
+lives in MCP *tools*. Both are portable across MCP-capable coding agents
+(Claude Code, others): same skills, same MCP server.
 
 ---
 
@@ -136,9 +127,8 @@ The model's primary knowledge surface.
 Stage skills can be removed or marked done after completion.
 
 All skills are loaded by Claude Code automatically (progressive disclosure:
-name + description always in context, body loaded on demand). For the Slack
-agent, knowledge-skill bodies are injected into the system prompt — we own
-that prompt.
+name + description always in context, body loaded on demand). Other
+MCP-capable agents follow the same convention.
 
 PR-gated. Skill changes are a normal review.
 
@@ -321,8 +311,7 @@ statusowl/                           ← public, MIT, github.com/dmitriko/status
   cmd/registry/                      ← CLI (optional, for scripted use)
   cmd/mcp/                           ← Go MCP server
   cmd/querier/                       ← Python Lambda
-  cmd/slack/                         ← Go Slack connector
-  terraform/statusowl/                ← TF module: querier + optional MCP/Slack
+  terraform/statusowl/                ← TF module: querier + optional MCP
   internal/...
 
 statusowl-template/                  ← public, github.com/dmitriko/statusowl-template
@@ -370,16 +359,13 @@ Build order roughly mirrors the user journey.
 - `statusowl-template` repo: `statusowl-concepts` skill, three stage skills,
   empty registry/accounts files, README.
 - TF module `terraform/statusowl/`: querier (always), MCP (optional, default
-  on), Slack (optional, default off). Outputs role ARNs and endpoint URLs.
+  on). Outputs role ARNs and endpoint URLs.
 - Querier Lambda: narrow IAM, audit log, assume-role for multi-account.
 - `bootstrap` skill: orient, write `module "statusowl"` block.
 - `deploy` skill: walk user through `terraform apply`, verify outputs.
 - `build-registry` skill: probe proposal via querier, file generation.
 - MCP server with `get_status` and `run_python`. Code cache (S3, hashed
   by EnvDef values + focus). Result cache.
-- Slack connector. Channel mode where the bot reads every message and
-  decides when to respond. Audit log at the chat layer, separate from
-  querier audit.
 - `statusowl-registry` CLI: `init` / `sync` / `validate` for scripted use.
 - TF-state-as-source for stage 3 and CLI.
 - Multi-account exercised end-to-end.
@@ -389,13 +375,12 @@ Build order roughly mirrors the user journey.
 
 ## Component summary
 
-The engine — three Lambdas:
+The engine — two Lambdas:
 
-| Component           | Language | Runtime  | Purpose                   |
-|---------------------|----------|----------|---------------------------|
-| `statusowl-slack`    | Go       | Lambda   | Slack connector           |
-| `statusowl-mcp`      | Go       | Lambda   | MCP server, hot path      |
-| `statusowl-querier`  | Python   | Lambda   | Sandboxed code execution  |
+| Component           | Language | Runtime          | Purpose                   |
+|---------------------|----------|------------------|---------------------------|
+| `statusowl-mcp`     | Go       | Lambda or stdio  | MCP server, hot path      |
+| `statusowl-querier` | Python   | Lambda           | Sandboxed code execution  |
 
 Plus a CLI for build-time work:
 
