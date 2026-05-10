@@ -1,6 +1,6 @@
 # statusowl
 
-A read-only AWS investigation agent for MCP-capable coding agents. We use Claude Code mostly.
+A read-only AWS investigation agent for MCP-capable coding agents.
 
 [**See the design and the reasoning →**](./DESIGN.md)
 
@@ -8,7 +8,7 @@ A read-only AWS investigation agent for MCP-capable coding agents. We use Claude
 
 ## What it actually does
 
-You ask your coding agent about your AWS environment in plain English.
+You ask your coding agent (we use Claude Code mostly) about your AWS environment in plain English.
 statusowl makes it run sandboxed Python (boto3, narrow IAM) against your
 account and synthesize an answer. It investigates instead of just listing.
 The examples below use Claude Code, but the MCP server is standard and can
