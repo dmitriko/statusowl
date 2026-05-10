@@ -1,6 +1,6 @@
 # statusowl
 
-A read-only AWS investigation agent for MCP-capable coding agents.
+A read-only AWS investigation tool for MCP-capable coding agents.
 
 [**See the design and the reasoning →**](./DESIGN.md)
 
