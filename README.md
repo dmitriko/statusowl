@@ -42,6 +42,9 @@ That's not a list of API responses. It's an investigation: list cluster,
 join with services, find rollout failures, group by failure mode, surface a
 pattern across envs. One round trip.
 
+> **You** investigate why  preview-g7h8i9-worker-svc is failing exactly 
+> **Agent (via statusowl):**
+Gives you exact the reason why it's failing and what to do to fix it.
 ---
 
 ## Why it's safe
